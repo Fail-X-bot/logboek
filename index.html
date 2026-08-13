@@ -142,7 +142,7 @@
   </div>
 
   <details class="panel" id="form-panel">
-    <summary><strong id="form-title">➕ Nieuw Item / Locatie Toevoegen</strong></summary>
+    <summary><strong id="form-title">➕ Nieuw Item / Instellingen</strong></summary>
     <br>
     <input type="hidden" id="edit-item-id" value="">
 
@@ -170,7 +170,7 @@
 
     <hr style="border-color: var(--border); margin: 15px 0;">
 
-    <details>
+    <details style="margin-bottom: 10px;">
       <summary>⚙️ Locaties Beheren</summary>
       <br>
       <input type="text" id="new-location-name" placeholder="Nieuwe locatie (bv. Voertuig)">
@@ -181,6 +181,18 @@
         <select id="delete-location-select" style="margin:0;"></select>
         <button type="button" class="btn-danger" onclick="deleteLocation()" style="width:auto; margin:0;">Verwijderen</button>
       </div>
+    </details>
+
+    <details>
+      <summary>💾 Backup & Herstel (Voorkom dataverlies)</summary>
+      <br>
+      <small style="color: #a0a0a0; display:block; margin-bottom: 5px;">
+        Maak regelmatig een backup om te voorkomen dat je spullen kwijtraakt bij het wissen van je browsergeschiedenis.
+      </small>
+      <button type="button" class="btn-sec" onclick="exportData()">📥 Reservekopie Downloaden (Backup)</button>
+      
+      <label style="margin-top: 10px; display:block;">Backup bestand inladen:</label>
+      <input type="file" id="import-file" accept=".json" onchange="importData(event)">
     </details>
   </details>
 
@@ -204,60 +216,41 @@
       localStorage.setItem('mil_items', JSON.stringify(items));
     }
 
-    function addCustomLocation() {
-      const locName = document.getElementById('new-location-name').value.trim();
-      if (locName && !locations.includes(locName)) {
-        locations.push(locName);
-        document.getElementById('new-location-name').value = '';
-        saveData();
-        updateUI();
-      }
-    }
-
-    function deleteLocation() {
-      const locToDelete = document.getElementById('delete-location-select').value;
-      if (!locToDelete) return;
+    // --- BACKUP & HERSTEL FUNCTIES ---
+    function exportData() {
+      const data = {
+        locations: locations,
+        tags: allTags,
+        items: items
+      };
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
       
-      if (confirm(`Weet je zeker dat je locatie '${locToDelete}' wilt verwijderen? Items op deze locatie worden verplaatst naar de eerste beschikbare locatie.`)) {
-        locations = locations.filter(l => l !== locToDelete);
-        const fallbackLoc = locations[0] || "Thuis";
-        
-        items.forEach(item => {
-          if (item.parent === locToDelete) item.parent = fallbackLoc;
-        });
-
-        saveData();
-        updateUI();
-      }
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `logboek_backup_${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
 
-    function addCustomTag() {
-      const input = document.getElementById('custom-tag-input');
-      const tag = input.value.trim().toLowerCase();
-      if (tag) {
-        if (!allTags.includes(tag)) {
-          allTags.push(tag);
-        }
-        if (!selectedTagsForForm.includes(tag)) {
-          selectedTagsForForm.push(tag);
-        }
-        input.value = '';
-        saveData();
-        renderTagCloud();
-      }
-    }
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
 
-    function toggleTagSelection(tag) {
-      if (selectedTagsForForm.includes(tag)) {
-        selectedTagsForForm = selectedTagsForForm.filter(t => t !== tag);
-      } else {
-        selectedTagsForForm.push(tag);
-      }
-      renderTagCloud();
-    }
-
-    function renderTagCloud() {
-      const cloud = document.getElementById('existing-tags-cloud');
-      cloud.innerHTML = '';
-      allTags.forEach(tag => {
-        const isSelected = selectedTagsForForm.includes(tag
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.locations && data.items) {
+            locations = data.locations;
+            allTags = data.tags || [];
+            items = data.items;
+            saveData();
+            updateUI();
+            alert("Backup succesvol ingeladen!");
+          } else {
+            alert("Ongeldig backup bestand.");
+          }
+        } catch (err) {
