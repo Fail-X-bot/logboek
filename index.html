@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Militair Logboek</title>
+  <style>
+    :root {
+      --bg-color: #1e241e;
+      --card-bg: #2a322a;
+      --accent: #5b7052;
+      --accent-hover: #4a5c42;
+      --text: #e0e6df;
+      --border: #3d483d;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text);
+      margin: 0;
+      padding: 15px;
+      padding-bottom: 80px;
+    }
+
+    h1, h2 { text-align: center; color: #a3b899; margin-bottom: 10px; }
+
+    .panel {
+      background: var(--card-bg);
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      border: 1px solid var(--border);
+    }
+
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0 10px 0;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: #181c18;
+      color: var(--text);
+      box-sizing: border-box;
+    }
+
+    button {
+      background: var(--accent);
+      color: white;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:active { background: var(--accent-hover); }
+
+    .item-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .item-card.nested {
+      margin-left: 20px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .item-img {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 5px;
+      background: #181c18;
+    }
+
+    .item-info { flex-grow: 1; }
+    .item-title { font-weight: bold; font-size: 1.1em; }
+    .item-sub { font-size: 0.85em; color: #a0a0a0; }
+    .tag { background: #3a4738; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; margin-right: 4px; }
+
+    .checkbox-container {
+      width: 25px;
+      height: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .checkbox-container input { width: 20px; height: 20px; }
+
+    #batch-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #111511;
+      padding: 10px 15px;
+      border-top: 2px solid var(--accent);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <h1>🪖 Uitrusting Logboek</h1>
+
+  <div class="panel">
+    <input type="text" id="search-input" placeholder="🔍 Zoek op naam, tag of inhoud..." oninput="renderItems()">
+    <select id="filter-location" onchange="renderItems()">
+      <option value="ALL">🌍 Alle Locaties</option>
+    </select>
+  </div>
+
+  <details class="panel">
+    <summary><strong>➕ Nieuw Item / Locatie Toevoegen</strong></summary>
+    <br>
+    <label>Naam item:</label>
+    <input type="text" id="new-name" placeholder="bv. Rugzak, Kompas, GPS">
+
+    <label>Locatie / Zit in:</label>
+    <select id="new-parent"></select>
+
+    <label>Nieuwe locatie aanmaken? (Optioneel):</label>
+    <input type="text" id="new-location-name" placeholder="bv. Thuis, Basis, Voertuig">
+    <button type="button" onclick="addCustomLocation()">Locatie Toevoegen</button>
+
+    <label>Trefwoorden (gescheiden door komma's):</label>
+    <input type="text" id="new-tags" placeholder="bv. Navigatie, Essentieel, Kleding">
+
+    <label>Foto (wordt automatisch verkleind):</label>
+    <input type="file" id="new-photo" accept="image/*">
+
+    <button type="button" onclick="addItem()">Opslaan</button>
+  </details>
+
+  <div id="item-list"></div>
+
+  <div id="batch-bar" class="hidden">
+    <span id="selected-count">0 gekozen</span>
+    <select id="move-destination" style="margin:0;"></select>
+    <button onclick="moveSelectedItems()" style="margin:0; width:auto;">Verplaatsen</button>
+  </div>
+
+  <script>
+    // Standaard locaties en data opslag
+    let locations = JSON.parse(localStorage.getItem('mil_locations')) || ["Thuis", "Basis", "Kast A"];
+    let items = JSON.parse(localStorage.getItem('mil_items')) || [];
+
+    function saveData() {
+      localStorage.setItem('mil_locations', JSON.stringify(locations));
+      localStorage.setItem('mil_items', JSON.stringify(items));
+    }
+
+    function addCustomLocation() {
+      const locName = document.getElementById('new-location-name').value.trim();
+      if (locName && !locations.includes(locName)) {
+        locations.push(locName);
+        document.getElementById('new-location-name').value = '';
+        saveData();
+        updateDropdowns();
+      }
+    }
+
+    function updateDropdowns() {
+      const filterLoc = document.getElementById('filter-location');
+      const newParent = document.getElementById('new-parent');
+      const moveDest = document.getElementById('move-destination');
+
+      const currentFilter = filterLoc.value;
+
+      filterLoc.innerHTML = '<option value="ALL">🌍 Alle Locaties</option>';
+      newParent.innerHTML = '';
+      moveDest.innerHTML = '<option value="">Verplaats naar...</option>';
+
+      // Voeg hoofdlocaties toe
+      locations.forEach(loc => {
+        filterLoc.innerHTML += `<option value="${loc}">${loc}</option>`;
+        newParent.innerHTML += `<option value="${loc}">📍 Locatie: ${loc}</option>`;
+        moveDest.innerHTML += `<option value="${loc}">📍 Locatie: ${loc}</option>`;
+      });
+
+      // Voeg bestaande items toe als mogelijke 'parent' (containers)
+      items.forEach(item => {
+        newParent.innerHTML += `<option value="ITEM_${item.id}">🎒 In: ${item.name}</option>`;
+        moveDest.innerHTML += `<option value="ITEM_${item.id}">🎒 In: ${item.name}</option>`;
+      });
+
+      filterLoc.value = currentFilter;
+    }
+
+    // Afbeelding verkleinen voor snelle opslag
+    function compressImage(file, callback) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const maxDim = 150; // Max 150px breed/hoog
+          let w = img.width, h = img.height;
+          
+          if (w > h) { if (w > maxDim) { h *= maxDim / w; w = maxDim; } }
+          else { if (h > maxDim) { w *= maxDim / h; h = maxDim; } }
+
+          canvas.width = w; canvas.height = h;
+          ctx.drawImage(img, 0, 0, w, h);
+          callback(canvas.toDataURL('image/jpeg', 0.5)); // Lage kwaliteit JPEG
+        };
+        img.src = e.target.result;
+      };
+      if (file) reader.readAsDataURL(file);
+      else callback("");
+    }
+
+    function addItem() {
+      const name = document.getElementById('new-name').value.trim();
+      const parentVal = document.getElementById('new-parent').value;
+      const tags = document.getElementById('new-tags').value.split(',').map(t => t.trim()).filter(t => t);
+      const photoInput = document.getElementById('new-photo');
+
+      if (!name) return alert("Vul een naam in!");
+
+      compressImage(photoInput.files[0], function(base64Image) {
+        const newItem = {
+          id: Date.now().toString(),
+          name: name,
+          parent: parentVal, // Kan een locatie zijn ("Thuis") of een item ("ITEM_123")
+          tags: tags,
+          image: base64Image
+        };
+
+        items.push(newItem);
+        saveData();
+        document.getElementById('new-name').value = '';
+        document.getElementById('new-tags').value = '';
+        document.getElementById('new-photo').value = '';
+        updateDropdowns();
+        renderItems();
+      });
+    }
+
+    // Bepaal de hoofdlocatie en container van een item (ook als het diep in een tas zit)
+    function getItemPath(item) {
+      if (locations.includes(item.parent)) {
+        return { rootLocation: item.parent, containerName: null };
+      } else if (item.parent.startsWith("ITEM_")) {
+        const parentId = item.parent.replace("ITEM_", "");
+        const parentItem = items.find(i => i.id === parentId);
+        if (parentItem) {
+          const parentPath = getItemPath(parentItem);
+          return {
+            rootLocation: parentPath.rootLocation,
+            containerName: parentItem.name
+          };
+        }
+      }
+      return { rootLocation: "Onbekend", containerName: null };
+    }
+
+    function renderItems() {
+      const list = document.getElementById('item-list');
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const filterLoc = document.getElementById('filter-location').value;
+
+      list.innerHTML = '';
+
+      items.forEach(item => {
+        const path = getItemPath(item);
+        
+        // Zoek/Filter logica
+        const matchesSearch = item.name.toLowerCase().includes(search) || 
+                              item.tags.some(t => t.toLowerCase().includes(search)) ||
+                              (path.containerName && path.containerName.toLowerCase().includes(search));
+        
+        const matchesLocation = filterLoc === "ALL" || path.rootLocation === filterLoc;
+
+        if (matchesSearch && matchesLocation) {
+          const isNested = item.parent.startsWith("ITEM_");
+          let subText = `📍 ${path.rootLocation}`;
+          if (path.containerName) subText += ` 🎒 (In: ${path.containerName})`;
+
+          const card = document.createElement('div');
+          card.className = `item-card ${isNested ? 'nested' : ''}`;
+          card.innerHTML = `
+            <div class="checkbox-container">
+              <input type="checkbox" value="${item.id}" onchange="toggleBatchBar()">
+            </div>
+            <img class="item-img" src="${item.image || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'50\' height=\'50\'><rect width=\'50\' height=\'50\' fill=\'%23181c18\'/></svg>'}" alt="">
+            <div class="item-info">
+              <div class="item-title">${item.name}</div>
+              <div class="item-sub">${subText}</div>
+              <div>${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+            </div>
+            <button onclick="deleteItem('${item.id}')" style="width:auto; background:#8b0000;">🗑️</button>
+          `;
+          list.appendChild(card);
+        }
+      });
+    }
+
+    function toggleBatchBar() {
+      const selected = document.querySelectorAll('.checkbox-container input:checked');
+      const bar = document.getElementById('batch-bar');
+      document.getElementById('selected-count').innerText = `${selected.length} gekozen`;
+      
+      if (selected.length > 0) {
+        bar.classList.remove('hidden');
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+
+    function moveSelectedItems() {
+      const target = document.getElementById('move-destination').value;
+      if (!target) return alert("Kies een bestemming!");
+
+      const selectedIds = Array.from(document.querySelectorAll('.checkbox-container input:checked')).map(cb => cb.value);
+
+      items.forEach(item => {
+        if (selectedIds.includes(item.id)) {
+          item.parent = target;
+        }
+      });
+
+      saveData();
+      renderItems();
+      toggleBatchBar();
+    }
+
+    function deleteItem(id) {
+      if (confirm("Item verwijderen?")) {
+        items = items.filter(i => i.id !== id);
+        // Zet eventuele kind-items los
+        items.forEach(i => {
+          if (i.parent === `ITEM_${id}`) i.parent = locations[0] || "Thuis";
+        });
+        saveData();
+        updateDropdowns();
+        renderItems();
+      }
+    }
+
+    // Init
+    updateDropdowns();
+    renderItems();
+  </script>
+</body>
+</html>
