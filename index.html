@@ -254,3 +254,305 @@
             alert("Ongeldig backup bestand.");
           }
         } catch (err) {
+          alert("Fout bij het lezen van het bestand.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function addCustomLocation() {
+      const locInput = document.getElementById('new-location-name');
+      const locName = locInput.value.trim();
+      if (locName) {
+        if (!locations.includes(locName)) {
+          locations.push(locName);
+          locInput.value = '';
+          saveData();
+          updateUI();
+          alert(`Locatie '${locName}' toegevoegd!`);
+        } else {
+          alert("Deze locatie bestaat al!");
+        }
+      } else {
+        alert("Vul een locatienaam in!");
+      }
+    }
+
+    function deleteLocation() {
+      const locToDelete = document.getElementById('delete-location-select').value;
+      if (!locToDelete) return;
+      
+      if (confirm(`Weet je zeker dat je locatie '${locToDelete}' wilt verwijderen?`)) {
+        locations = locations.filter(l => l !== locToDelete);
+        const fallbackLoc = locations[0] || "Thuis";
+        
+        items.forEach(item => {
+          if (item.parent === locToDelete) item.parent = fallbackLoc;
+        });
+
+        saveData();
+        updateUI();
+      }
+    }
+
+    function addCustomTag() {
+      const input = document.getElementById('custom-tag-input');
+      const tag = input.value.trim().toLowerCase();
+      if (tag) {
+        if (!allTags.includes(tag)) allTags.push(tag);
+        if (!selectedTagsForForm.includes(tag)) selectedTagsForForm.push(tag);
+        input.value = '';
+        saveData();
+        renderTagCloud();
+      }
+    }
+
+    function toggleTagSelection(tag) {
+      if (selectedTagsForForm.includes(tag)) {
+        selectedTagsForForm = selectedTagsForForm.filter(t => t !== tag);
+      } else {
+        selectedTagsForForm.push(tag);
+      }
+      renderTagCloud();
+    }
+
+    function renderTagCloud() {
+      const cloud = document.getElementById('existing-tags-cloud');
+      cloud.innerHTML = '';
+      allTags.forEach(tag => {
+        const isSelected = selectedTagsForForm.includes(tag);
+        const chip = document.createElement('span');
+        chip.className = `tag-chip ${isSelected ? 'active' : ''}`;
+        chip.innerText = (tag === 'inhoud' ? '🎒 ' : '') + tag;
+        chip.onclick = () => toggleTagSelection(tag);
+        cloud.appendChild(chip);
+      });
+    }
+
+    function updateDropdowns() {
+      const filterLoc = document.getElementById('filter-location');
+      const newParent = document.getElementById('new-parent');
+      const moveDest = document.getElementById('move-destination');
+      const delLocSelect = document.getElementById('delete-location-select');
+
+      const currentFilter = filterLoc.value;
+
+      filterLoc.innerHTML = '<option value="ALL">🌍 Alle Locaties</option>';
+      newParent.innerHTML = '';
+      moveDest.innerHTML = '<option value="">Verplaats naar...</option>';
+      delLocSelect.innerHTML = '';
+
+      locations.forEach(loc => {
+        filterLoc.innerHTML += `<option value="${loc}">${loc}</option>`;
+        newParent.innerHTML += `<option value="${loc}">📍 Locatie: ${loc}</option>`;
+        moveDest.innerHTML += `<option value="${loc}">📍 Locatie: ${loc}</option>`;
+        delLocSelect.innerHTML += `<option value="${loc}">${loc}</option>`;
+      });
+
+      const containerItems = items.filter(i => i.tags && i.tags.includes('inhoud'));
+      
+      containerItems.forEach(item => {
+        const editId = document.getElementById('edit-item-id').value;
+        if (item.id !== editId) {
+          newParent.innerHTML += `<option value="ITEM_${item.id}">🎒 In: ${item.name}</option>`;
+          moveDest.innerHTML += `<option value="ITEM_${item.id}">🎒 In: ${item.name}</option>`;
+        }
+      });
+
+      if (locations.includes(currentFilter) || currentFilter === "ALL") {
+        filterLoc.value = currentFilter;
+      }
+    }
+
+    function compressImage(file, callback) {
+      if (!file) return callback(null);
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const maxDim = 150;
+          let w = img.width, h = img.height;
+          if (w > h) { if (w > maxDim) { h *= maxDim / w; w = maxDim; } }
+          else { if (h > maxDim) { w *= maxDim / h; h = maxDim; } }
+          canvas.width = w; canvas.height = h;
+          ctx.drawImage(img, 0, 0, w, h);
+          callback(canvas.toDataURL('image/jpeg', 0.5));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function saveItem() {
+      const id = document.getElementById('edit-item-id').value;
+      const name = document.getElementById('new-name').value.trim();
+      const parentVal = document.getElementById('new-parent').value;
+      const photoInput = document.getElementById('new-photo');
+
+      if (!name) return alert("Vul een naam in voor het item!");
+
+      compressImage(photoInput.files[0], function(base64Image) {
+        if (id) {
+          const item = items.find(i => i.id === id);
+          if (item) {
+            item.name = name;
+            item.parent = parentVal;
+            item.tags = [...selectedTagsForForm];
+            if (base64Image) item.image = base64Image;
+          }
+        } else {
+          const newItem = {
+            id: Date.now().toString(),
+            name: name,
+            parent: parentVal,
+            tags: [...selectedTagsForForm],
+            image: base64Image || ""
+          };
+          items.push(newItem);
+        }
+
+        saveData();
+        resetForm();
+        updateUI();
+      });
+    }
+
+    function editItem(id) {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+
+      document.getElementById('edit-item-id').value = item.id;
+      document.getElementById('new-name').value = item.name;
+      selectedTagsForForm = [...(item.tags || [])];
+      
+      document.getElementById('form-title').innerText = "✏️ Item Aanpassen";
+      document.getElementById('save-btn').innerText = "Wijzigingen Opslaan";
+      document.getElementById('cancel-btn').classList.remove('hidden');
+      document.getElementById('form-panel').open = true;
+
+      updateDropdowns();
+      document.getElementById('new-parent').value = item.parent;
+      renderTagCloud();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetForm() {
+      document.getElementById('edit-item-id').value = '';
+      document.getElementById('new-name').value = '';
+      document.getElementById('new-photo').value = '';
+      selectedTagsForForm = [];
+      document.getElementById('form-title').innerText = "➕ Nieuw Item / Instellingen";
+      document.getElementById('save-btn').innerText = "Item Opslaan";
+      document.getElementById('cancel-btn').classList.add('hidden');
+      renderTagCloud();
+      updateDropdowns();
+    }
+
+    function getItemPath(item) {
+      if (locations.includes(item.parent)) {
+        return { rootLocation: item.parent, containerName: null };
+      } else if (item.parent && item.parent.startsWith("ITEM_")) {
+        const parentId = item.parent.replace("ITEM_", "");
+        const parentItem = items.find(i => i.id === parentId);
+        if (parentItem) {
+          const parentPath = getItemPath(parentItem);
+          return {
+            rootLocation: parentPath.rootLocation,
+            containerName: parentItem.name
+          };
+        }
+      }
+      return { rootLocation: locations[0] || "Onbekend", containerName: null };
+    }
+
+    function renderItems() {
+      const list = document.getElementById('item-list');
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const filterLoc = document.getElementById('filter-location').value;
+
+      list.innerHTML = '';
+
+      items.forEach(item => {
+        const path = getItemPath(item);
+        
+        const matchesSearch = item.name.toLowerCase().includes(search) || 
+                              (item.tags && item.tags.some(t => t.toLowerCase().includes(search))) ||
+                              (path.containerName && path.containerName.toLowerCase().includes(search));
+        
+        const matchesLocation = filterLoc === "ALL" || path.rootLocation === filterLoc;
+
+        if (matchesSearch && matchesLocation) {
+          const isNested = item.parent && item.parent.startsWith("ITEM_");
+          let subText = `📍 ${path.rootLocation}`;
+          if (path.containerName) subText += ` 🎒 (In: ${path.containerName})`;
+
+          const card = document.createElement('div');
+          card.className = `item-card ${isNested ? 'nested' : ''}`;
+          card.innerHTML = `
+            <div class="checkbox-container">
+              <input type="checkbox" value="${item.id}" onchange="toggleBatchBar()">
+            </div>
+            <img class="item-img" src="${item.image || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'50\' height=\'50\'><rect width=\'50\' height=\'50\' fill=\'%23181c18\'/></svg>'}" alt="">
+            <div class="item-info">
+              <div class="item-title">${item.name}</div>
+              <div class="item-sub">${subText}</div>
+              <div>${(item.tags || []).map(t => `<span class="tag">${t === 'inhoud' ? '🎒 ' : ''}${t}</span>`).join('')}</div>
+            </div>
+            <div class="action-btns">
+              <button onclick="editItem('${item.id}')" class="btn-sec">✏️</button>
+              <button onclick="deleteItem('${item.id}')" class="btn-danger">🗑️</button>
+            </div>
+          `;
+          list.appendChild(card);
+        }
+      });
+    }
+
+    function toggleBatchBar() {
+      const selected = document.querySelectorAll('.checkbox-container input:checked');
+      const bar = document.getElementById('batch-bar');
+      document.getElementById('selected-count').innerText = `${selected.length} gekozen`;
+      bar.classList.toggle('hidden', selected.length === 0);
+    }
+
+    function moveSelectedItems() {
+      const target = document.getElementById('move-destination').value;
+      if (!target) return alert("Kies een bestemming!");
+
+      const selectedIds = Array.from(document.querySelectorAll('.checkbox-container input:checked')).map(cb => cb.value);
+
+      items.forEach(item => {
+        if (selectedIds.includes(item.id)) {
+          item.parent = target;
+        }
+      });
+
+      saveData();
+      updateUI();
+      toggleBatchBar();
+    }
+
+    function deleteItem(id) {
+      if (confirm("Weet je zeker dat je dit item wilt verwijderen?")) {
+        items = items.filter(i => i.id !== id);
+        items.forEach(i => {
+          if (i.parent === `ITEM_${id}`) i.parent = locations[0] || "Thuis";
+        });
+        saveData();
+        updateUI();
+      }
+    }
+
+    function updateUI() {
+      updateDropdowns();
+      renderTagCloud();
+      renderItems();
+    }
+
+    // Start-up
+    updateUI();
+  </script>
+</body>
+</html>
