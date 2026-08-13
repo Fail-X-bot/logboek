@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Militair Logboek</title>
+  <title>Militair Logboek Pro</title>
   <style>
     :root {
       --bg-color: #1e241e;
@@ -12,6 +12,7 @@
       --accent-hover: #4a5c42;
       --text: #e0e6df;
       --border: #3d483d;
+      --danger: #8b0000;
     }
 
     body {
@@ -20,10 +21,10 @@
       color: var(--text);
       margin: 0;
       padding: 15px;
-      padding-bottom: 80px;
+      padding-bottom: 90px;
     }
 
-    h1, h2 { text-align: center; color: #a3b899; margin-bottom: 10px; }
+    h1 { text-align: center; color: #a3b899; margin-bottom: 15px; font-size: 1.5em; }
 
     .panel {
       background: var(--card-bg);
@@ -42,6 +43,7 @@
       background: #181c18;
       color: var(--text);
       box-sizing: border-box;
+      font-size: 0.95em;
     }
 
     button {
@@ -52,7 +54,30 @@
       cursor: pointer;
     }
 
-    button:active { background: var(--accent-hover); }
+    button.btn-danger { background: var(--danger); }
+    button.btn-sec { background: #3a4738; }
+
+    .tag-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin: 5px 0 10px 0;
+    }
+
+    .tag-chip {
+      background: #181c18;
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.8em;
+      cursor: pointer;
+    }
+
+    .tag-chip.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
 
     .item-card {
       background: var(--card-bg);
@@ -66,7 +91,7 @@
     }
 
     .item-card.nested {
-      margin-left: 20px;
+      margin-left: 15px;
       border-left: 3px solid var(--accent);
     }
 
@@ -76,20 +101,16 @@
       object-fit: cover;
       border-radius: 5px;
       background: #181c18;
+      flex-shrink: 0;
     }
 
     .item-info { flex-grow: 1; }
-    .item-title { font-weight: bold; font-size: 1.1em; }
-    .item-sub { font-size: 0.85em; color: #a0a0a0; }
-    .tag { background: #3a4738; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; margin-right: 4px; }
+    .item-title { font-weight: bold; font-size: 1em; }
+    .item-sub { font-size: 0.8em; color: #a0a0a0; margin: 2px 0; }
+    .tag { background: #3a4738; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-right: 4px; display: inline-block; }
 
-    .checkbox-container {
-      width: 25px;
-      height: 25px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+    .action-btns { display: flex; gap: 5px; }
+    .action-btns button { width: auto; padding: 6px 10px; margin: 0; font-size: 0.8em; }
 
     .checkbox-container input { width: 20px; height: 20px; }
 
@@ -111,7 +132,7 @@
 </head>
 <body>
 
-  <h1>🪖 Uitrusting Logboek</h1>
+  <h1>🪖 Militair Logboek</h1>
 
   <div class="panel">
     <input type="text" id="search-input" placeholder="🔍 Zoek op naam, tag of inhoud..." oninput="renderItems()">
@@ -120,26 +141,47 @@
     </select>
   </div>
 
-  <details class="panel">
-    <summary><strong>➕ Nieuw Item / Locatie Toevoegen</strong></summary>
+  <details class="panel" id="form-panel">
+    <summary><strong id="form-title">➕ Nieuw Item / Locatie Toevoegen</strong></summary>
     <br>
-    <label>Naam item:</label>
-    <input type="text" id="new-name" placeholder="bv. Rugzak, Kompas, GPS">
+    <input type="hidden" id="edit-item-id" value="">
 
-    <label>Locatie / Zit in:</label>
+    <label>Naam item:</label>
+    <input type="text" id="new-name" placeholder="bv. Rugzak 60L, Kompas, Vest">
+
+    <label>Locatie / Waar zit het in?:</label>
     <select id="new-parent"></select>
 
-    <label>Nieuwe locatie aanmaken? (Optioneel):</label>
-    <input type="text" id="new-location-name" placeholder="bv. Thuis, Basis, Voertuig">
-    <button type="button" onclick="addCustomLocation()">Locatie Toevoegen</button>
+    <label>Selecteer Trefwoorden (Klik om te kiezen):</label>
+    <div class="tag-cloud" id="existing-tags-cloud"></div>
 
-    <label>Trefwoorden (gescheiden door komma's):</label>
-    <input type="text" id="new-tags" placeholder="bv. Navigatie, Essentieel, Kleding">
+    <label>Nieuw trefwoord toevoegen:</label>
+    <div style="display: flex; gap: 5px;">
+      <input type="text" id="custom-tag-input" placeholder="bv. inhoud, waterdicht" style="margin:0;">
+      <button type="button" onclick="addCustomTag()" style="width: auto; margin:0;">+ Tag</button>
+    </div>
+    <small style="color: #a0a0a0; display:block; margin-bottom: 10px;">💡 Gebruik het trefwoord <b>"inhoud"</b> om van dit item een tas/container te maken!</small>
 
-    <label>Foto (wordt automatisch verkleind):</label>
+    <label>Foto (optioneel):</label>
     <input type="file" id="new-photo" accept="image/*">
 
-    <button type="button" onclick="addItem()">Opslaan</button>
+    <button type="button" id="save-btn" onclick="saveItem()">Item Opslaan</button>
+    <button type="button" id="cancel-btn" class="btn-sec hidden" onclick="resetForm()">Annuleren</button>
+
+    <hr style="border-color: var(--border); margin: 15px 0;">
+
+    <details>
+      <summary>⚙️ Locaties Beheren</summary>
+      <br>
+      <input type="text" id="new-location-name" placeholder="Nieuwe locatie (bv. Voertuig)">
+      <button type="button" onclick="addCustomLocation()">Locatie Toevoegen</button>
+      
+      <label>Bestaande locatie verwijderen:</label>
+      <div style="display:flex; gap:5px;">
+        <select id="delete-location-select" style="margin:0;"></select>
+        <button type="button" class="btn-danger" onclick="deleteLocation()" style="width:auto; margin:0;">Verwijderen</button>
+      </div>
+    </details>
   </details>
 
   <div id="item-list"></div>
@@ -151,12 +193,14 @@
   </div>
 
   <script>
-    // Standaard locaties en data opslag
     let locations = JSON.parse(localStorage.getItem('mil_locations')) || ["Thuis", "Basis", "Kast A"];
+    let allTags = JSON.parse(localStorage.getItem('mil_tags')) || ["inhoud", "kleding", "navigatie", "essentieel"];
     let items = JSON.parse(localStorage.getItem('mil_items')) || [];
+    let selectedTagsForForm = [];
 
     function saveData() {
       localStorage.setItem('mil_locations', JSON.stringify(locations));
+      localStorage.setItem('mil_tags', JSON.stringify(allTags));
       localStorage.setItem('mil_items', JSON.stringify(items));
     }
 
@@ -166,192 +210,54 @@
         locations.push(locName);
         document.getElementById('new-location-name').value = '';
         saveData();
-        updateDropdowns();
+        updateUI();
       }
     }
 
-    function updateDropdowns() {
-      const filterLoc = document.getElementById('filter-location');
-      const newParent = document.getElementById('new-parent');
-      const moveDest = document.getElementById('move-destination');
-
-      const currentFilter = filterLoc.value;
-
-      filterLoc.innerHTML = '<option value="ALL">🌍 Alle Locaties</option>';
-      newParent.innerHTML = '';
-      moveDest.innerHTML = '<option value="">Verplaats naar...</option>';
-
-      // Voeg hoofdlocaties toe
-      locations.forEach(loc => {
-        filterLoc.innerHTML += `<option value="${loc}">${loc}</option>`;
-        newParent.innerHTML += `<option value="${loc}">📍 Locatie: ${loc}</option>`;
-        moveDest.innerHTML += `<option value="${loc}">📍 Locatie: ${loc}</option>`;
-      });
-
-      // Voeg bestaande items toe als mogelijke 'parent' (containers)
-      items.forEach(item => {
-        newParent.innerHTML += `<option value="ITEM_${item.id}">🎒 In: ${item.name}</option>`;
-        moveDest.innerHTML += `<option value="ITEM_${item.id}">🎒 In: ${item.name}</option>`;
-      });
-
-      filterLoc.value = currentFilter;
-    }
-
-    // Afbeelding verkleinen voor snelle opslag
-    function compressImage(file, callback) {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const maxDim = 150; // Max 150px breed/hoog
-          let w = img.width, h = img.height;
-          
-          if (w > h) { if (w > maxDim) { h *= maxDim / w; w = maxDim; } }
-          else { if (h > maxDim) { w *= maxDim / h; h = maxDim; } }
-
-          canvas.width = w; canvas.height = h;
-          ctx.drawImage(img, 0, 0, w, h);
-          callback(canvas.toDataURL('image/jpeg', 0.5)); // Lage kwaliteit JPEG
-        };
-        img.src = e.target.result;
-      };
-      if (file) reader.readAsDataURL(file);
-      else callback("");
-    }
-
-    function addItem() {
-      const name = document.getElementById('new-name').value.trim();
-      const parentVal = document.getElementById('new-parent').value;
-      const tags = document.getElementById('new-tags').value.split(',').map(t => t.trim()).filter(t => t);
-      const photoInput = document.getElementById('new-photo');
-
-      if (!name) return alert("Vul een naam in!");
-
-      compressImage(photoInput.files[0], function(base64Image) {
-        const newItem = {
-          id: Date.now().toString(),
-          name: name,
-          parent: parentVal, // Kan een locatie zijn ("Thuis") of een item ("ITEM_123")
-          tags: tags,
-          image: base64Image
-        };
-
-        items.push(newItem);
-        saveData();
-        document.getElementById('new-name').value = '';
-        document.getElementById('new-tags').value = '';
-        document.getElementById('new-photo').value = '';
-        updateDropdowns();
-        renderItems();
-      });
-    }
-
-    // Bepaal de hoofdlocatie en container van een item (ook als het diep in een tas zit)
-    function getItemPath(item) {
-      if (locations.includes(item.parent)) {
-        return { rootLocation: item.parent, containerName: null };
-      } else if (item.parent.startsWith("ITEM_")) {
-        const parentId = item.parent.replace("ITEM_", "");
-        const parentItem = items.find(i => i.id === parentId);
-        if (parentItem) {
-          const parentPath = getItemPath(parentItem);
-          return {
-            rootLocation: parentPath.rootLocation,
-            containerName: parentItem.name
-          };
-        }
-      }
-      return { rootLocation: "Onbekend", containerName: null };
-    }
-
-    function renderItems() {
-      const list = document.getElementById('item-list');
-      const search = document.getElementById('search-input').value.toLowerCase();
-      const filterLoc = document.getElementById('filter-location').value;
-
-      list.innerHTML = '';
-
-      items.forEach(item => {
-        const path = getItemPath(item);
-        
-        // Zoek/Filter logica
-        const matchesSearch = item.name.toLowerCase().includes(search) || 
-                              item.tags.some(t => t.toLowerCase().includes(search)) ||
-                              (path.containerName && path.containerName.toLowerCase().includes(search));
-        
-        const matchesLocation = filterLoc === "ALL" || path.rootLocation === filterLoc;
-
-        if (matchesSearch && matchesLocation) {
-          const isNested = item.parent.startsWith("ITEM_");
-          let subText = `📍 ${path.rootLocation}`;
-          if (path.containerName) subText += ` 🎒 (In: ${path.containerName})`;
-
-          const card = document.createElement('div');
-          card.className = `item-card ${isNested ? 'nested' : ''}`;
-          card.innerHTML = `
-            <div class="checkbox-container">
-              <input type="checkbox" value="${item.id}" onchange="toggleBatchBar()">
-            </div>
-            <img class="item-img" src="${item.image || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'50\' height=\'50\'><rect width=\'50\' height=\'50\' fill=\'%23181c18\'/></svg>'}" alt="">
-            <div class="item-info">
-              <div class="item-title">${item.name}</div>
-              <div class="item-sub">${subText}</div>
-              <div>${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
-            </div>
-            <button onclick="deleteItem('${item.id}')" style="width:auto; background:#8b0000;">🗑️</button>
-          `;
-          list.appendChild(card);
-        }
-      });
-    }
-
-    function toggleBatchBar() {
-      const selected = document.querySelectorAll('.checkbox-container input:checked');
-      const bar = document.getElementById('batch-bar');
-      document.getElementById('selected-count').innerText = `${selected.length} gekozen`;
+    function deleteLocation() {
+      const locToDelete = document.getElementById('delete-location-select').value;
+      if (!locToDelete) return;
       
-      if (selected.length > 0) {
-        bar.classList.remove('hidden');
-      } else {
-        bar.classList.add('hidden');
-      }
-    }
-
-    function moveSelectedItems() {
-      const target = document.getElementById('move-destination').value;
-      if (!target) return alert("Kies een bestemming!");
-
-      const selectedIds = Array.from(document.querySelectorAll('.checkbox-container input:checked')).map(cb => cb.value);
-
-      items.forEach(item => {
-        if (selectedIds.includes(item.id)) {
-          item.parent = target;
-        }
-      });
-
-      saveData();
-      renderItems();
-      toggleBatchBar();
-    }
-
-    function deleteItem(id) {
-      if (confirm("Item verwijderen?")) {
-        items = items.filter(i => i.id !== id);
-        // Zet eventuele kind-items los
-        items.forEach(i => {
-          if (i.parent === `ITEM_${id}`) i.parent = locations[0] || "Thuis";
+      if (confirm(`Weet je zeker dat je locatie '${locToDelete}' wilt verwijderen? Items op deze locatie worden verplaatst naar de eerste beschikbare locatie.`)) {
+        locations = locations.filter(l => l !== locToDelete);
+        const fallbackLoc = locations[0] || "Thuis";
+        
+        items.forEach(item => {
+          if (item.parent === locToDelete) item.parent = fallbackLoc;
         });
+
         saveData();
-        updateDropdowns();
-        renderItems();
+        updateUI();
       }
     }
 
-    // Init
-    updateDropdowns();
-    renderItems();
-  </script>
-</body>
-</html>
+    function addCustomTag() {
+      const input = document.getElementById('custom-tag-input');
+      const tag = input.value.trim().toLowerCase();
+      if (tag) {
+        if (!allTags.includes(tag)) {
+          allTags.push(tag);
+        }
+        if (!selectedTagsForForm.includes(tag)) {
+          selectedTagsForForm.push(tag);
+        }
+        input.value = '';
+        saveData();
+        renderTagCloud();
+      }
+    }
+
+    function toggleTagSelection(tag) {
+      if (selectedTagsForForm.includes(tag)) {
+        selectedTagsForForm = selectedTagsForForm.filter(t => t !== tag);
+      } else {
+        selectedTagsForForm.push(tag);
+      }
+      renderTagCloud();
+    }
+
+    function renderTagCloud() {
+      const cloud = document.getElementById('existing-tags-cloud');
+      cloud.innerHTML = '';
+      allTags.forEach(tag => {
+        const isSelected = selectedTagsForForm.includes(tag
