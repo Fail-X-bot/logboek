@@ -79,6 +79,28 @@
       border-color: var(--accent);
     }
 
+    .manage-tag-chip {
+      background: #181c18;
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.8em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .manage-tag-chip button {
+      background: none;
+      border: none;
+      color: #ff6b6b;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      font-size: 0.9em;
+      width: auto;
+    }
+
     .item-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -169,6 +191,13 @@
     <button type="button" id="cancel-btn" class="btn-sec hidden" onclick="resetForm()">Annuleren</button>
 
     <hr style="border-color: var(--border); margin: 15px 0;">
+
+    <details style="margin-bottom: 10px;">
+      <summary>🏷️ Trefwoorden Beheren / Verwijderen</summary>
+      <br>
+      <small style="color: #a0a0a0; display:block; margin-bottom: 5px;">Klik op het kruisje om een trefwoord definitief uit de lijst te wissen:</small>
+      <div class="tag-cloud" id="manage-tags-cloud"></div>
+    </details>
 
     <details style="margin-bottom: 10px;">
       <summary>⚙️ Locaties Beheren</summary>
@@ -304,6 +333,24 @@
         input.value = '';
         saveData();
         renderTagCloud();
+        renderManageTags();
+      }
+    }
+
+    function deleteTag(tagToDelete) {
+      if (confirm(`Weet je zeker dat je het trefwoord '${tagToDelete}' wilt verwijderen?`)) {
+        allTags = allTags.filter(t => t !== tagToDelete);
+        selectedTagsForForm = selectedTagsForForm.filter(t => t !== tagToDelete);
+        
+        // Verwijder de tag ook van bestaande items
+        items.forEach(item => {
+          if (item.tags) {
+            item.tags = item.tags.filter(t => t !== tagToDelete);
+          }
+        });
+
+        saveData();
+        updateUI();
       }
     }
 
@@ -325,6 +372,17 @@
         chip.className = `tag-chip ${isSelected ? 'active' : ''}`;
         chip.innerText = (tag === 'inhoud' ? '🎒 ' : '') + tag;
         chip.onclick = () => toggleTagSelection(tag);
+        cloud.appendChild(chip);
+      });
+    }
+
+    function renderManageTags() {
+      const cloud = document.getElementById('manage-tags-cloud');
+      cloud.innerHTML = '';
+      allTags.forEach(tag => {
+        const chip = document.createElement('span');
+        chip.className = 'manage-tag-chip';
+        chip.innerHTML = `${tag === 'inhoud' ? '🎒 ' : ''}${tag} <button onclick="deleteTag('${tag}')">❌</button>`;
         cloud.appendChild(chip);
       });
     }
@@ -548,6 +606,7 @@
     function updateUI() {
       updateDropdowns();
       renderTagCloud();
+      renderManageTags();
       renderItems();
     }
 
