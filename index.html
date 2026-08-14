@@ -158,9 +158,22 @@
 
   <div class="panel">
     <input type="text" id="search-input" placeholder="🔍 Zoek op naam, tag of inhoud..." oninput="renderItems()">
-    <select id="filter-location" onchange="renderItems()">
-      <option value="ALL">🌍 Alle Locaties</option>
-    </select>
+    
+    <div style="display: flex; gap: 5px;">
+      <select id="filter-location" onchange="renderItems()" style="margin: 0;">
+        <option value="ALL">🌍 Alle Locaties</option>
+      </select>
+      
+      <select id="sort-order" onchange="renderItems()" style="margin: 0;">
+        <option value="NEWEST">⏳ Nieuwste eerst</option>
+        <option value="OLDEST">⌛ Oudste eerst</option>
+        <option value="AZ">🔤 Naam (A-Z)</option>
+        <option value="ZA">🔤 Naam (Z-A)</option>
+      </select>
+    </div>
+
+    <label style="margin-top: 10px; display: block; font-size: 0.85em;">Filter op trefwoorden (selecteer meerdere):</label>
+    <div class="tag-cloud" id="filter-tags-cloud"></div>
   </div>
 
   <details class="panel" id="form-panel">
@@ -237,7 +250,9 @@
     let locations = JSON.parse(localStorage.getItem('mil_locations')) || ["Thuis", "Basis", "Kast A"];
     let allTags = JSON.parse(localStorage.getItem('mil_tags')) || ["inhoud", "kleding", "navigatie", "essentieel"];
     let items = JSON.parse(localStorage.getItem('mil_items')) || [];
+    
     let selectedTagsForForm = [];
+    let selectedTagsForFilter = [];
 
     function saveData() {
       localStorage.setItem('mil_locations', JSON.stringify(locations));
@@ -247,11 +262,7 @@
 
     // --- BACKUP & HERSTEL FUNCTIES ---
     function exportData() {
-      const data = {
-        locations: locations,
-        tags: allTags,
-        items: items
-      };
+      const data = { locations, tags: allTags, items };
       const jsonStr = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -332,7 +343,7 @@
         if (!selectedTagsForForm.includes(tag)) selectedTagsForForm.push(tag);
         input.value = '';
         saveData();
-        renderTagCloud();
+        renderTagClouds();
         renderManageTags();
       }
     }
@@ -341,8 +352,8 @@
       if (confirm(`Weet je zeker dat je het trefwoord '${tagToDelete}' wilt verwijderen?`)) {
         allTags = allTags.filter(t => t !== tagToDelete);
         selectedTagsForForm = selectedTagsForForm.filter(t => t !== tagToDelete);
+        selectedTagsForFilter = selectedTagsForFilter.filter(t => t !== tagToDelete);
         
-        // Verwijder de tag ook van bestaande items
         items.forEach(item => {
           if (item.tags) {
             item.tags = item.tags.filter(t => t !== tagToDelete);
@@ -354,25 +365,48 @@
       }
     }
 
-    function toggleTagSelection(tag) {
+    function toggleTagSelectionForm(tag) {
       if (selectedTagsForForm.includes(tag)) {
         selectedTagsForForm = selectedTagsForForm.filter(t => t !== tag);
       } else {
         selectedTagsForForm.push(tag);
       }
-      renderTagCloud();
+      renderTagClouds();
     }
 
-    function renderTagCloud() {
-      const cloud = document.getElementById('existing-tags-cloud');
-      cloud.innerHTML = '';
+    function toggleTagSelectionFilter(tag) {
+      if (selectedTagsForFilter.includes(tag)) {
+        selectedTagsForFilter = selectedTagsForFilter.filter(t => t !== tag);
+      } else {
+        selectedTagsForFilter.push(tag);
+      }
+      renderTagClouds();
+      renderItems();
+    }
+
+    function renderTagClouds() {
+      // Form tags
+      const formCloud = document.getElementById('existing-tags-cloud');
+      formCloud.innerHTML = '';
       allTags.forEach(tag => {
         const isSelected = selectedTagsForForm.includes(tag);
         const chip = document.createElement('span');
         chip.className = `tag-chip ${isSelected ? 'active' : ''}`;
         chip.innerText = (tag === 'inhoud' ? '🎒 ' : '') + tag;
-        chip.onclick = () => toggleTagSelection(tag);
-        cloud.appendChild(chip);
+        chip.onclick = () => toggleTagSelectionForm(tag);
+        formCloud.appendChild(chip);
+      });
+
+      // Filter tags op startpagina
+      const filterCloud = document.getElementById('filter-tags-cloud');
+      filterCloud.innerHTML = '';
+      allTags.forEach(tag => {
+        const isSelected = selectedTagsForFilter.includes(tag);
+        const chip = document.createElement('span');
+        chip.className = `tag-chip ${isSelected ? 'active' : ''}`;
+        chip.innerText = (tag === 'inhoud' ? '🎒 ' : '') + tag;
+        chip.onclick = () => toggleTagSelectionFilter(tag);
+        filterCloud.appendChild(chip);
       });
     }
 
@@ -492,8 +526,25 @@
 
       updateDropdowns();
       document.getElementById('new-parent').value = item.parent;
-      renderTagCloud();
+      renderTagClouds();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function duplicateItem(id) {
+      const original = items.find(i => i.id === id);
+      if (!original) return;
+
+      const newItem = {
+        id: Date.now().toString(),
+        name: original.name + " (Kopie)",
+        parent: original.parent,
+        tags: [...(original.tags || [])],
+        image: original.image || ""
+      };
+
+      items.push(newItem);
+      saveData();
+      updateUI();
     }
 
     function resetForm() {
@@ -504,7 +555,7 @@
       document.getElementById('form-title').innerText = "➕ Nieuw Item / Instellingen";
       document.getElementById('save-btn').innerText = "Item Opslaan";
       document.getElementById('cancel-btn').classList.add('hidden');
-      renderTagCloud();
+      renderTagClouds();
       updateDropdowns();
     }
 
@@ -529,19 +580,37 @@
       const list = document.getElementById('item-list');
       const search = document.getElementById('search-input').value.toLowerCase();
       const filterLoc = document.getElementById('filter-location').value;
+      const sortOrder = document.getElementById('sort-order').value;
 
       list.innerHTML = '';
 
-      items.forEach(item => {
+      // Klonen om de originele volgorde te bewaren voor de ID-logs
+      let filteredItems = [...items];
+
+      // Sortering toepassen
+      filteredItems.sort((a, b) => {
+        if (sortOrder === 'AZ') return a.name.localeCompare(b.name);
+        if (sortOrder === 'ZA') return b.name.localeCompare(a.name);
+        if (sortOrder === 'OLDEST') return parseInt(a.id) - parseInt(b.id);
+        return parseInt(b.id) - parseInt(a.id); // NEWEST (standaard)
+      });
+
+      filteredItems.forEach(item => {
         const path = getItemPath(item);
         
+        // Zoekfilter
         const matchesSearch = item.name.toLowerCase().includes(search) || 
                               (item.tags && item.tags.some(t => t.toLowerCase().includes(search))) ||
                               (path.containerName && path.containerName.toLowerCase().includes(search));
         
+        // Locatiefilter
         const matchesLocation = filterLoc === "ALL" || path.rootLocation === filterLoc;
 
-        if (matchesSearch && matchesLocation) {
+        // Meerdere Tags Filter (moet álle geselecteerde tags bevatten)
+        const matchesTags = selectedTagsForFilter.length === 0 || 
+                            selectedTagsForFilter.every(tag => item.tags && item.tags.includes(tag));
+
+        if (matchesSearch && matchesLocation && matchesTags) {
           const isNested = item.parent && item.parent.startsWith("ITEM_");
           let subText = `📍 ${path.rootLocation}`;
           if (path.containerName) subText += ` 🎒 (In: ${path.containerName})`;
@@ -559,8 +628,9 @@
               <div>${(item.tags || []).map(t => `<span class="tag">${t === 'inhoud' ? '🎒 ' : ''}${t}</span>`).join('')}</div>
             </div>
             <div class="action-btns">
-              <button onclick="editItem('${item.id}')" class="btn-sec">✏️</button>
-              <button onclick="deleteItem('${item.id}')" class="btn-danger">🗑️</button>
+              <button onclick="duplicateItem('${item.id}')" class="btn-sec" title="Kopiëren">📋</button>
+              <button onclick="editItem('${item.id}')" class="btn-sec" title="Bewerken">✏️</button>
+              <button onclick="deleteItem('${item.id}')" class="btn-danger" title="Verwijderen">🗑️</button>
             </div>
           `;
           list.appendChild(card);
@@ -605,7 +675,7 @@
 
     function updateUI() {
       updateDropdowns();
-      renderTagCloud();
+      renderTagClouds();
       renderManageTags();
       renderItems();
     }
